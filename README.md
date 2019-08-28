@@ -41,7 +41,7 @@ npm run devserver -- --port 8888
 1) In two browsers enable debug console
 
 2) Open collaborative editing example page
-http://localhost:8888/examples/collab/#edit-Example
+http://localhost:8888/examples/collab/
 
 3) In console `join websocket`  should appear
 
