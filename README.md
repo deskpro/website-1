@@ -45,4 +45,6 @@ http://localhost:8888/examples/collab/#edit-Example
 
 3) In console `join websocket`  should appear
 
+Note, that for now all browsers should first connect to websocket (start from the same document point) and only then you should start editing.
+
 4) Try to edit document - in another browser we should see reflected changes

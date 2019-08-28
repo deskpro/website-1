@@ -11,11 +11,14 @@ import {schema} from "../schema"
 import {GET, POST} from "./http"
 import {Reporter} from "./reporter"
 import {commentPlugin, commentUI, addAnnotation, annotationIcon} from "./comment"
+import cursorsPlugin from './cursor';
+// import uuidv4 from "uuid/v4";
+// import randomatic from "randomatic";
 
 
 //const WEBSOCKET_URL = "ws://localhost:3001";
 const WEBSOCKET_URL = "wss://7hsxmtd8ac.execute-api.eu-west-1.amazonaws.com/dev";
-const DOC_PREFIX = "pref_1_";
+const DOC_PREFIX = "pref_3";
 
 const report = new Reporter()
 
@@ -43,6 +46,10 @@ class EditorConnection {
     // DESKPRO EDIT
     this.socket = new WebSocket(WEBSOCKET_URL);
     this.docName = docName;
+    this.users = [];
+    this.identity = "Identity_" + Math.floor(Math.random()*1000);
+    this.displayName = "User_" + Math.floor(Math.random()*1000);
+    this.cursorPosition = 1;
     this.start()
   }
 
@@ -56,6 +63,7 @@ class EditorConnection {
         plugins: exampleSetup({schema, history: false, menuContent: menu.fullMenu}).concat([
           history({preserveItems: true}),
           collab({version: action.version}),
+          cursorsPlugin,
           commentPlugin,
           commentUI(transaction => this.dispatch({type: "transaction", transaction}))
         ]),
@@ -107,19 +115,37 @@ class EditorConnection {
           state: this.state.edit,
           // DESKPRO EDIT
           dispatchTransaction: transaction => {
+            console.log("dispatchTransaction", transaction);
             let newState = this.view.state.apply(transaction)
             this.view.updateState(newState)
             let sendable = sendableSteps(newState)
             if (sendable) {
+              console.log("There is some sendable", sendable);
               let json = JSON.stringify({
                 action: "setEditorState",
+                eventType: "edit",
                 version: sendable.version + 1,
                 steps: sendable.steps ? sendable.steps.map(s => s.toJSON()) : [],
                 clientID: sendable.clientID,
-                documentUrn: this.docName
+                documentUrn: this.docName,
+                // for now send cursor position as standalone call
+                // cursorPosition: newState.selection.$head.pos
               });
 
-              const res = this.socket.send(json);
+              this.socket.send(json);
+            }
+
+            if (this.cursorPosition !== newState.selection.$head.pos) {
+              this.cursorPosition = newState.selection.$head.pos;
+              console.log("Broadcast cursor position", this.cursorPosition);
+              let json = JSON.stringify({
+                action: "setEditorState",
+                eventType: "cursor",
+                documentUrn: this.docName,
+                cursorPosition: this.cursorPosition
+              });
+
+              this.socket.send(json);
             }
           }
         }))
@@ -131,25 +157,57 @@ class EditorConnection {
 
     let self = this;
 
+    this.users = [];
+    this.cursorPosition = 1;
+
     // DESKPRO EDIT
     setTimeout(()=>{
       console.log("join websocket", this.docName);
       this.socket.send(JSON.stringify({
         action: "joinCollab",
-        documentUrn: this.docName
+        documentUrn: this.docName,
+        identity: this.identity,
+        displayName: this.displayName,
+        cursorPosition: this.cursorPosition
       }));
+      // this.socket.send(JSON.stringify({
+      //   action: "getConnectedUsers",
+      //   documentUrn: this.docName,
+      // }));
     }, 1000);
 
     this.socket.addEventListener('message', function (event) {
-      console.log('Got websocket message', event.data);
       const data = JSON.parse(event.data);
-      console.log(data);
-      const steps = data.event.steps.map(j => Step.fromJSON(schema, j));
-      const clientIds = new Array(steps.length).fill(data.event.clientID);
+      console.log('Got websocket message', data);
 
-      self.view.dispatch(
-        receiveTransaction(self.view.state, steps, clientIds)
-      );
+      switch (data.action) {
+        case "edit":
+          console.log("Processing edit event");
+          const steps = data.event.steps.map(j => Step.fromJSON(schema, j));
+          const clientIds = new Array(steps.length).fill(data.event.clientID);
+          const tr = receiveTransaction(self.view.state, steps, clientIds);
+          self.view.dispatch(
+            receiveTransaction(self.view.state, steps, clientIds)
+          );
+          break;
+        case "connectedUsers":
+          self.users = data.users
+            .filter(u => u.identity !== self.identity)
+            .map((u, index) => {
+              u.cursorColor = self.selectColor(index+1)
+              return u;
+            });
+          const cuTr = view.state.tr;
+          cuTr.setMeta(cursorsPlugin, {
+            type: 'receive',
+            userCursors: self.users
+          });
+          self.view.dispatch(cuTr);
+          self.showUsers();
+          break;
+        default:
+          console.log("Unknown action");
+      }
     });
     this.socket.addEventListener('error', function (event) {
       console.log('Webscoket Error', event);
@@ -167,6 +225,25 @@ class EditorConnection {
     }, err => {
       this.report.failure(err)
     })
+  }
+
+  selectColor(colorNum, colors = 20) {
+    if (colors < 1) colors = 1; // defaults to one color - avoid divide by zero
+    if (colorNum % 2 == 0) {
+      colorNum = colors - colorNum;
+    }
+    return 'hsl(' + ((colorNum * (360 / colors)) % 360) + ',100%,50%)';
+  }
+
+  showUsers() {
+    let ul = crel("ul");
+    this.users.forEach(user => {
+      ul.appendChild(crel("li", {style: `color: ${user.cursorColor}`}, user.displayName));
+    })
+
+    document.getElementById('users_list').innerHTML = "";
+    crel( document.getElementById('users_list'), ul);
+    //document.getElementById('users_list').innerHTML = ul;
   }
 
   // Send a request for events that have happened since the version

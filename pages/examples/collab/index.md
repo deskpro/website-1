@@ -21,6 +21,6 @@ You can find the code for this
 
 **Disclaimer:** Since this demo is open for everybody, you might run
 into people typing stupid, mean, and disgusting things. Since I'm not
-going to be able to moderate this, I recommend just hitting delete.
+going to be able to moderate this, I recommend just hitting delete22.
 
 @HTML
