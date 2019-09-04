@@ -12,6 +12,10 @@ Install the module's dependencies:
 npm install
 ```
 
+Check this link to get websocket api url
+https://eu-west-1.console.aws.amazon.com/apigateway/home?region=eu-west-1#/apis/7hsxmtd8ac/stages/dev
+Current url: wss://7hsxmtd8ac.execute-api.eu-west-1.amazonaws.com/dev
+
 Adjust these constants `src/collab.js`:
 ```
 const WEBSOCKET_URL = "ws://localhost:3001";
