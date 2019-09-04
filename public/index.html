@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang=en-US>
+<meta charset=utf8>
+<meta name="viewport" content="width=device-width, initial-scale=1"><title>ProseMirror collab example</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel=stylesheet href=site.css>
+<article>
+  <h1>Collaborate</h1>
+  <p>The editor below talks to a simple server-side service to allow
+  real-time <a href="http://marijnhaverbeke.nl/blog/collaborative-editing.html">collaborative
+  editing</a>.
+  Everybody connected to a given document sees the same document, and
+  has their changes sent over to other people working on the
+  document.</p>
+
+  <h3>First Editor </h3>
+  <p><b>Your name: </b></p>
+  <div id="yourname_1"></div>
+  </br>
+  <b>Users:</b>
+  <div id="users_list_1"></div>
+  <div id="editor_1" style="margin-bottom: 0" class="editor"></div>
+  <hr/>
+  <h3>Second Editor </h3>
+  <p><b>Your name: </b></p>
+  <div id="yourname_2"></div>
+  </br>
+  <b>Users:</b>
+  <div id="users_list_2"></div>
+  <div id="editor_2" style="margin-bottom: 0" class="editor"></div>
+  <hr/>
+<script src="https://cdn.polyfill.io/v2/polyfill.min.js"></script>
+<script src="dist/bundle.js"></script>
+</article>
+
+</html>

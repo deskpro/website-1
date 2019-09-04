@@ -1,10 +1,3 @@
-/node_modules
-/public/**/*.html
-/public/examples/*/example.js
-/public/examples/prosemirror.js
-/public/css/editor.css
-/public/css/codemirror.css
-.tern-port
-/src/collab/demo-instances.json
-/markdown/CHANGELOG.md
-/example/build/
+dist
+node_modules
+public/dist

@@ -1,19 +1,72 @@
-import {exampleSetup, buildMenuItems} from "prosemirror-example-setup"
+import {exampleSetup} from "prosemirror-example-setup"
 import {Step} from "prosemirror-transform"
 import {EditorState} from "prosemirror-state"
 import {EditorView} from "prosemirror-view"
 import {history} from "prosemirror-history"
-import {collab, receiveTransaction, sendableSteps, getVersion} from "prosemirror-collab"
+import {collab, receiveTransaction, sendableSteps} from "prosemirror-collab"
 import crel from "crel"
 
-import {schema} from "../schema"
-import {GET} from "./http"
+const {schema} = require("./schema")
+
+
+
+const $node = (type, attrs, content, marks) => schema.node(type, attrs, content, marks)
+const $text = (str, marks) => schema.text(str, marks)
+
+const em = schema.marks.em.create();
+
 import {getCursorPlugin}  from './cursor';
 
+import * as jwt  from "jsonwebtoken";
 
-const WEBSOCKET_URL = "ws://localhost:3001";
-//const WEBSOCKET_URL = "wss://7hsxmtd8ac.execute-api.eu-west-1.amazonaws.com/dev";
-const DOC_PREFIX = "pref_1";
+//const WEBSOCKET_URL = "ws://localhost:3001";
+const WEBSOCKET_URL = "wss://7hsxmtd8ac.execute-api.eu-west-1.amazonaws.com/dev";
+const DOC_PREFIX = "test_1";
+
+const JWT_TOKEN_SECRET = "AC1C44C8-3AE9-4181-97AB-1A68D1E6601B";
+const DOC_1 = "Example";
+const DOC_2 = "Nonsense";
+
+const PAYLOAD_1 = {
+  sub: "Identity_" + Math.floor(Math.random()*1000),
+  iss: "some-deskpro-client-id",
+  name: "User_" + Math.floor(Math.random()*1000),
+  aud: DOC_PREFIX + DOC_1
+};
+const PAYLOAD_2 = {
+  sub: "Identity_" + Math.floor(Math.random()*1000),
+  iss: "some-deskpro-client-id",
+  name: "User_" + Math.floor(Math.random()*1000),
+  aud: DOC_PREFIX + DOC_2
+};
+const TOKEN_1 = jwt.sign(
+  PAYLOAD_1,
+  JWT_TOKEN_SECRET,
+  { expiresIn: 30000 }
+);
+const TOKEN_2 = jwt.sign(
+  PAYLOAD_2,
+  JWT_TOKEN_SECRET,
+  { expiresIn: 30000 }
+);
+
+const SCHEMA_1 = $node("doc", null, [
+  $node("heading", {level: 2}, [$text("Example Document 1")]),
+  $node("paragraph", null, [
+    $text("There is nothing here yet. "),
+    $text("Add something!", [em])
+  ])
+]);
+
+const SCHEMA_2 = $node("doc", null, [
+  $node("heading", {level: 2}, [$text("Example Document 2")]),
+  $node("paragraph", null, [
+    $text("There is nothing here yet. "),
+    $text("Add something!", [em])
+  ])
+]);
+
+
 
 class State {
   constructor(edit, comm) {
@@ -23,20 +76,20 @@ class State {
 }
 
 class EditorConnection {
-  constructor(url, docName, divPrefix) {
-    this.url = url
+  constructor(docName, divPrefix, jwt, identity, displayName, schema) {
     this.state = new State(null, "start")
-    this.request = null
     this.view = null
     this.dispatch = this.dispatch.bind(this)
 
     // DESKPRO EDIT
+    this.schema = schema;
+    this.jwt = jwt;
     this.divPrefix = divPrefix;
-    this.socket = new WebSocket(WEBSOCKET_URL);
+    this.socket = new WebSocket(WEBSOCKET_URL + `?authToken=${jwt}`);
     this.docName = docName;
     this.users = [];
-    this.identity = "Identity_" + Math.floor(Math.random()*1000);
-    this.displayName = "User_" + Math.floor(Math.random()*1000);
+    this.identity = identity;
+    this.displayName = displayName;
     this.cursorPosition = 1;
     this.cursorPlugin = getCursorPlugin();
     this.start()
@@ -115,14 +168,14 @@ class EditorConnection {
     // DESKPRO EDIT
     setTimeout(()=>{
       console.log("join websocket", this.docName);
+
       this.socket.send(JSON.stringify({
         action: "joinCollab",
         documentUrn: this.docName,
-        identity: this.identity,
-        displayName: this.displayName,
-        cursorPosition: this.cursorPosition
+        cursorPosition: this.cursorPosition,
+        authToken: self.jwt
       }));
-    }, 1000);
+    }, 2000);
 
     this.socket.addEventListener('message', function (event) {
       const data = JSON.parse(event.data);
@@ -160,17 +213,12 @@ class EditorConnection {
       console.log('Webscoket Error', event);
     });
 
-    this.run(GET(this.url)).then(data => {
-      data = JSON.parse(data)
-      this.backOff = 0
-      this.dispatch({type: "loaded",
-                     doc: schema.nodeFromJSON(data.doc),
-                     version: data.version,
-                     users: data.users,
-                     })
-    }, err => {
-      console.log(err);
-    })
+    this.dispatch({
+      type: "loaded",
+      doc: this.schema,
+      version: 1,
+      users: [],
+    });
   }
 
   selectColor(colorNum, colors = 20) {
@@ -191,10 +239,6 @@ class EditorConnection {
     crel( document.getElementById('users_list_'+this.divPrefix), ul);
   }
 
-  run(request) {
-    return this.request = request
-  }
-
   close() {
     // DESKPRO EDIT
     this.socket.close();
@@ -208,15 +252,26 @@ class EditorConnection {
 }
 
 function createFirstEditor() {
-  let docName = "Example";
-  new EditorConnection("/collab-backend/docs/" + docName, DOC_PREFIX + docName, "1")
+  new EditorConnection(
+    DOC_PREFIX + DOC_1,
+    "1",
+    TOKEN_1,
+    PAYLOAD_1.sub,
+    PAYLOAD_1.name,
+    SCHEMA_1)
 }
 
 
 function createSecondEditor() {
-  let docName = "Nonsense";
-  new EditorConnection("/collab-backend/docs/" + docName, DOC_PREFIX + docName, "2")
+  new EditorConnection(
+    DOC_PREFIX + DOC_2,
+    "2",
+    TOKEN_2,
+    PAYLOAD_2.sub,
+    PAYLOAD_2.name,
+    SCHEMA_2)
 }
 
 createFirstEditor();
 createSecondEditor();
+
